@@ -1,0 +1,55 @@
+* {
+	margin: 0;
+	padding: 0;
+}
+	
+body {
+	font-family: helvetica;
+	width: 100%;
+	background: #000;
+}
+	
+#wrapper {
+	width: 1024px;
+	margin: 0 auto;
+}
+
+#header {
+	width: 100%;
+	text-align: center;
+	background: #000;
+	margin: 12px 0;
+}
+	
+h1 {
+	width: 240px;
+	font-size: 18px;
+	color: #fff;
+	text-align: center;
+	font-weight: normal;
+	margin: 0 12px;
+	display: inline;
+}
+
+form {
+	display: inline;
+	margin: 0 12px;
+}
+
+#branch {
+	width: 240px;
+	font-size: 16px;
+	text-align: center;
+	border: solid 3px #999;
+}
+
+#members select{
+	width: 240px;
+	font-size: 16px;
+	text-align: center;
+	border: solid 3px #999;
+}
+
+canvas {
+	background: #eee;
+}

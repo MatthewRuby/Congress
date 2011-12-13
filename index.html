@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>112th U.S. Congress</title>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<link rel="SHORTCUT ICON" href="http://www.matt-ruby.com/congress/favicon.ico"/>
+	<link href="style.css" rel="stylesheet" type="text/css" />
+	
+	
+	<script type = "text/javascript" src = "ajax.js"></script>
+	<script type = "text/javascript" src = "utils.js"></script>
+	<script type = "text/javascript" src = "pulldown.js"></script>
+
+	<script type = "text/javascript" src = "bar.js"></script>
+	<script type = "text/javascript" src = "multiBar.js"></script>
+	<script type = "text/javascript" src = "memberDisplay.js"></script>
+	<script type = "text/javascript" src = "detailBox.js"></script>
+	
+	<script type = "text/javascript" src = "textBlock.js"></script>
+	<script type = "text/javascript" src = "block.js"></script>
+
+
+
+
+	<script type="text/javascript">
+
+			var loading;
+			var canvas;
+			var g;
+			var mX;
+			var mY;
+			var mP;
+
+			var parent;
+			var houseMenu;
+			var senateMenu;
+			var memberDraw;
+
+			var activeMember = "";
+			var activeBranch = "";
+			var activeDetail = -1;
+			var prevActive = -1;
+			
+			var activeCommittees = [];
+			
+			var details = [];
+			
+
+	// --- Initial build list of both house and senate to build pulldowns ---
+			var houseMembers = [];
+			var senateMembers = [];
+
+			function branchQuery(a){
+				ajax("members.php", null, returnMembers);
+			}
+
+			function returnMembers(m){
+				var xml = m;
+				if(typeof m == 'string') {
+					xml = stringToXml(m);
+				}
+				var items = xml.getElementsByTagName('member');
+				var hI = 0;
+				var sI = 0
+				for(var i = 0; i < items.length; i++) {
+					var item = items.item(i);
+					var v = item.getElementsByTagName("id")[0].childNodes[0].nodeValue;				
+					var f = item.getElementsByTagName("firstname")[0].childNodes[0].nodeValue;
+					var l = item.getElementsByTagName("lastname")[0].childNodes[0].nodeValue;
+					var s = item.getElementsByTagName("state")[0].childNodes[0].nodeValue;
+					var p = item.getElementsByTagName("party")[0].childNodes[0].nodeValue;
+					var b = xml.getElementsByTagName("member")[i].attributes[0].value;
+					if(b == 'house'){
+						houseMembers[hI] = new Object;
+						houseMembers[hI].name = p + " - " + f + " " + l + ", " + s;
+						houseMembers[hI].value = v;
+						houseMembers[hI].branch = "house";
+						hI++;
+					}
+					if(b == 'senate'){
+						senateMembers[sI] = new Object;
+						senateMembers[sI].name = p + " - " + f + " " + l + ", " + s;
+						senateMembers[sI].value = v;
+						senateMembers[sI].branch = "senate";
+						sI++;
+					}
+				}
+				setup();
+			};
+
+			var blank_arr = ["","","","","","","","","","",""];
+	//------------------------------------------------------------------------
+			function changeList(value){
+
+				if(value == 'house'){	
+					console.log("house");
+
+					activeBranch = "house";
+					senateMenu.removeFromDOM();
+					houseMenu.addToDOM();
+					memberDraw.set(blank_arr);
+					for(var i = 0; i < memberDraw.bOver.length; i++){
+						details[i].set(0, 0, 0, false);
+					}
+//					memberDraw.bHide = true;
+
+				} else if(value == 'senate'){
+					console.log("senate");
+
+					activeBranch = "senate";
+					houseMenu.removeFromDOM();
+					senateMenu.addToDOM();
+					memberDraw.set(blank_arr);
+					for(var i = 0; i < memberDraw.bOver.length; i++){
+						details[i].set(0, 0, 0, false);
+					}
+//					memberDraw.bHide = true;
+				}
+			};	
+
+
+	//--------------------------------------------------
+			window.onload = function() {
+				branchQuery();
+				parent = document.getElementById("members");
+				canvas = document.getElementById("c");
+				canvas.setAttribute('width', '1024px');
+				canvas.setAttribute('height', '900px');
+				g = canvas.getContext('2d');
+			};
+
+
+			
+	//--------------------------------------------------		
+			function setup() {
+				houseMenu = new Pulldown(g, parent, houseMembers, 0);
+				senateMenu = new Pulldown(g, parent, senateMembers, 0);
+				senateMenu.addToDOM();
+
+				memberDraw = new MemberDisplay(g, 0, 50);
+				memberDraw.bHide = false;
+				
+				for(var i = 0; i < 16; i++){
+					details[i] = new DetailBox(g, 0, 0, 800, 600);
+				}
+				
+				details[2].label = "20 most recent bills sponsored";
+				details[3].label = "20 most recent bills co-sponsored";
+				details[4].label = "100 most recent voting positions";
+				details[5].label = "100 most recent voting positions";
+				
+				details[6].label = "Committee Members";
+				details[7].label = "Committee Members";
+				details[8].label = "Committee Members";
+				details[9].label = "Committee Members";
+				details[10].label = "Committee Members";
+				
+				changeList('house');
+
+				canvas.addEventListener('mousemove', mousemoved, false);
+				canvas.addEventListener('mousedown', mousePressed, false);
+				canvas.addEventListener('mouseup', mouseReleased, false);
+
+				setInterval(update, 1000/30);
+				setInterval(draw, 1000/30);
+			};
+
+
+	//--------------------------------------------------		
+			function update() {
+				
+				memberDraw.mouseOver(mX, mY, mP);
+				memberDraw.update();
+				
+				for(var i = 0; i < memberDraw.bOver.length; i++){
+					if(mP == true && memberDraw.bOver[i] == true){
+						if(i >= 2){
+							activeDetail = i;
+						}				
+					}
+				}
+				
+				if(activeDetail != prevActive && activeDetail != -1){
+					details[activeDetail].set(mX, mY, 0, true);
+					
+					if(activeDetail == 2){
+						billQuery(activeMember);
+					}
+					if(activeDetail == 3){
+						coSponsQuery(activeMember);
+					}
+					if(activeDetail == 4 || activeDetail == 5){
+						voteQuery(activeMember);
+					}
+					if(activeDetail > 5){
+						committeeQuery(activeCommittees[activeDetail - 6]);
+					}
+					
+					for(var i = 0; i < details.length; i++){					
+						if(i != activeDetail){
+							details[i].set(mX, mY, 0, false);
+						}
+					}
+				}
+
+				
+				for(var i = 0; i < details.length; i++){
+					details[i].update();
+					details[i].mouseOver(mX, mY, mP);
+				}
+				
+				prevActive = activeDetail;
+			};
+
+	//--------------------------------------------------		
+			function draw() {
+				g.clearRect(0,0,canvas.width, canvas.height);
+				
+				memberDraw.draw();
+				for(var i = 0; i < details.length; i++){
+					details[i].draw();
+				}
+			};		
+
+
+	//----------- Mouse Functions ----------------------			
+			function mousemoved(e) {
+				mX = e.offsetX;
+				mY = e.offsetY;
+			};
+	//--------------------------------------------------		
+			function mousePressed() {
+				mP = true;
+			};
+	//--------------------------------------------------
+			function mouseReleased() {
+				mP = false;			
+			};
+
+
+	//-----------------------------------------------------------	
+		billQuery = function (a){
+			console.log("bill query");
+			ajax("bills.php?q="+a, null, returnBills);
+		}
+		
+		var bill = [];
+	//-----------------------------------------------------------
+		var returnBills = function(data) {
+			var xml = data;
+			
+			if(typeof data == 'string') {
+				xml = stringToXml(data);
+			}
+			
+			var items = xml.getElementsByTagName('bill');
+
+			for(var i = 0; i < items.length; i++) {
+
+				var item = items.item(i);	
+			
+				bill[i] = item.getElementsByTagName("title")[0].childNodes[0].nodeValue;
+
+			}
+			
+			details[activeDetail].set(details[activeDetail].posX, details[activeDetail].posY, bill, true);
+			
+			console.log("bills success");
+		}
+	
+	//-----------------------------------------------------------	
+		coSponsQuery = function (a){
+			console.log("co-sponsor query");
+			ajax("cosponsor.php?q="+a, null, returnCoSpons);
+		}
+
+		var coSpons = [];
+	//-----------------------------------------------------------
+		var returnCoSpons = function(data) {
+			var xml = data;
+
+			if(typeof data == 'string') {
+				xml = stringToXml(data);
+			}
+
+			var items = xml.getElementsByTagName('bill');
+
+			for(var i = 0; i < items.length; i++) {
+
+				var item = items.item(i);	
+
+				coSpons[i] = item.getElementsByTagName("title")[0].childNodes[0].nodeValue;
+
+			}
+
+			details[activeDetail].set(details[activeDetail].posX, details[activeDetail].posY, coSpons, true);
+
+			console.log("co-sponsor success");
+		}
+		
+	//-----------------------------------------------------------	
+		voteQuery = function (a){
+			console.log("vote query");
+			ajax("votes.php?q="+a, null, returnVotes);
+		}
+
+		var vote = [];
+	//-----------------------------------------------------------
+		var returnVotes = function(data) {
+			var xml = data;
+			
+			if(typeof data == 'string') {
+				xml = stringToXml(data);
+			}
+
+			var items = xml.getElementsByTagName('vote');
+			for(var i = 0; i < items.length; i++) {
+				var item = items.item(i);
+				
+				vote[i] = new Object();
+				var billTitle = item.getElementsByTagName("bill");
+
+				if(billTitle[0].childNodes.length < 9){
+					vote[i].title = item.getElementsByTagName("question")[0].childNodes[0].nodeValue;
+				} else {
+					vote[i].title = billTitle[0].getElementsByTagName("title")[0].childNodes[0].nodeValue;
+				}
+		
+				vote[i].question = item.getElementsByTagName("question")[0].childNodes[0].nodeValue;
+				vote[i].date = item.getElementsByTagName("date")[0].childNodes[0].nodeValue;
+				vote[i].position = item.getElementsByTagName("position")[0].childNodes[0].nodeValue;
+			}
+
+			details[activeDetail].set(details[activeDetail].posX, details[activeDetail].posY, vote, true, "box");
+
+			console.log("vote success");
+		}
+		
+	//-----------------------------------------------------------	
+		committeeQuery = function (a){
+			console.log("committeeQuery query");
+			ajax("committees.php?q="+a, null, returnCommittee);
+		}
+
+		var comm = [];
+	//-----------------------------------------------------------
+		var returnCommittee = function(data) {
+			var xml = data;
+			
+			if(typeof data == 'string') {
+				xml = stringToXml(data);
+			}
+			
+			comm[0] = xml.getElementsByTagName("committee")[0].childNodes[0].nodeValue;
+			
+			var mem = xml.getElementsByTagName("member");
+			var nameCounter = 0;
+			var names = [];
+			
+			for(var i = 0; i < Math.floor(mem.length/5); i++){
+				names[i] = "";
+				
+				for(var j = 0; j < 5; j++){
+					
+					if(i * 5 + j < mem.length){
+						names[i] += new String(mem[i * 5 + j].getElementsByTagName("name")[0].childNodes[0].nodeValue + "  ");
+					}
+					
+				}
+				
+				comm[i + 1] = names[i];
+			}
+			
+			details[activeDetail].set(details[activeDetail].posX, details[activeDetail].posY, comm, true);
+			console.log("committeeQuery success");
+		}
+
+
+		var info = new Array;
+	//-----------------------------------------------------------	
+		query = function (a){
+			console.log("query");
+			activeMember = a;
+			ajax("api_conn.php?q="+a, null, success);
+			for(var i = 0; i < details.length; i++){					
+				details[i].set(mX, mY, 0, false);
+			}
+			activeDetail = -1;
+		};
+	//-----------------------------------------------------------
+		var success = function(data) {
+			var xml = data;
+			if(typeof data == 'string') {
+				xml = stringToXml(data);
+			}
+			var d = new Date();
+			var date_of_birth = xml.getElementsByTagName("date_of_birth")[0].childNodes[0].nodeValue;
+			var birthYear = '';
+			for(y = 0; y < 4; y++){
+				birthYear += date_of_birth[y];
+			}
+					
+			info[0] = d.getFullYear() - birthYear;
+			
+			var role = xml.getElementsByTagName("role");
+			var numRoles = role.length;
+			
+			info[1] = role[0].getElementsByTagName("seniority")[0].childNodes[0].nodeValue;
+			
+			var sponsored = 0;
+			var coSponsored = 0;
+			
+			var missed = 0;
+			var missDiv = 0;
+
+			var partVt = 0;
+			var partyDiv = 0;
+			
+			for(var i = 0; i < numRoles; i++){
+				
+				if(role[i].getElementsByTagName("bills_sponsored")[0] == undefined){
+					sponsored += 0;
+				} else {
+					var sp = new Number(role[i].getElementsByTagName("bills_sponsored")[0].childNodes[0].nodeValue);
+					sponsored += sp;
+				}
+				
+				if(role[i].getElementsByTagName("bills_cosponsored")[0] == undefined){
+					coSponsored += 0;
+				} else {
+					var cosp = new Number(role[i].getElementsByTagName("bills_cosponsored")[0].childNodes[0].nodeValue);
+					coSponsored += cosp;
+				}
+				
+				if(role[i].getElementsByTagName("missed_votes_pct")[0] == undefined){
+					missed += 0;
+				} else {
+					var m = new Number(role[i].getElementsByTagName("missed_votes_pct")[0].childNodes[0].nodeValue);
+					missed += m;
+					missDiv++;
+				}
+				
+				if(role[i].getElementsByTagName("votes_with_party_pct")[0] == undefined){
+					partVt += 0;
+				} else {
+					var pv = new Number(xml.getElementsByTagName("votes_with_party_pct")[0].childNodes[0].nodeValue);
+					partVt += pv;
+					partyDiv++;
+				}
+				
+			}
+			info[2] = sponsored;
+			info[3] = coSponsored;
+			
+			var missPct = missed / missDiv;
+			info[4] = missPct.toFixed(2);
+
+			var partyPct = partVt / partyDiv;
+			info[5] = partyPct.toFixed(2);
+
+			info[6] = new Array;
+			var cLen = role[0].getElementsByTagName("committee").length;
+			var c = role[0].getElementsByTagName("committee");
+			for(n = 0; n < cLen; n++){
+				info[6][n] = new Object();
+				info[6][n].name = c[n].getElementsByTagName("name")[0].childNodes[0].nodeValue;
+				info[6][n].code = c[n].getElementsByTagName("code")[0].childNodes[0].nodeValue;
+				
+				activeCommittees[n] = c[n].getElementsByTagName("code")[0].childNodes[0].nodeValue;
+			}
+			info[7] = xml.getElementsByTagName("first_name")[0].childNodes[0].nodeValue;
+		 	info[8] = xml.getElementsByTagName("last_name")[0].childNodes[0].nodeValue;
+			info[9] = xml.getElementsByTagName("current_party")[0].childNodes[0].nodeValue;
+			if(info[9] == 'D'){
+				info[10] = 'b';
+			} else {
+				info[10] = 'r';
+			}
+			info[11] = activeBranch;
+			memberDraw.set(info);
+			if(memberDraw.bHide == true){
+				memberDraw.bHide = false;
+			}
+			console.log("success");
+		};
+		
+</script>
+</head>
+<body>
+	<div id="wrapper">
+		
+		<div id="header">
+			
+			<h1>112th U.S. Congress</h1>
+			
+			<form method="get">
+				<select id="branch" onChange="changeList(value);">
+					<option value="house" selected="selected">House of Representatives</option>
+					<option value="senate">Senate</option>
+				</select>
+			</form>
+
+			<form id="members" method="get">
+			</form>
+			
+		</div>
+
+		<canvas id="c">
+		</canvas>
+			
+	</div>
+</body>
+</html>
